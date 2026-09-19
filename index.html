@@ -4,10 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JF 3D Tools</title>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"
+    }
+  }
+  </script>
+
   <style>
     :root{
       --bg:#0d1117;--panel:#161b22;--panel2:#21262d;--text:#f0f6fc;
-      --muted:#8b949e;--accent:#2f81f7;--border:#30363d;--ok:#238636;
+      --muted:#8b949e;--accent:#2f81f7;--border:#30363d;--ok:#238636;--danger:#da3633
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
@@ -20,35 +30,40 @@
     }
     button:hover,.file-label:hover{border-color:#58a6ff}
     .primary{background:var(--accent);border-color:var(--accent)}
+    .success{background:var(--ok);border-color:var(--ok)}
+    .danger{background:var(--danger);border-color:var(--danger)}
     input[type=file]{display:none}
-    .layout{display:grid;grid-template-columns:310px 1fr;height:calc(100vh - 60px)}
+    .layout{display:grid;grid-template-columns:330px 1fr;height:calc(100vh - 60px)}
     aside{border-right:1px solid var(--border);background:var(--panel);padding:14px;overflow:auto}
     main{position:relative;min-width:0}
     #viewer{position:absolute;inset:0}
     .drop{
       position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-      width:min(520px,80%);padding:30px;border:2px dashed #56606b;border-radius:18px;
-      text-align:center;background:rgba(13,17,23,.88);z-index:5
+      width:min(560px,82%);padding:30px;border:2px dashed #56606b;border-radius:18px;
+      text-align:center;background:rgba(13,17,23,.90);z-index:5
     }
     .drop.hidden{display:none}
     .drop h2{margin:0 0 10px}.drop p{margin:6px 0;color:var(--muted)}
     .section{margin-bottom:18px}.section h3{font-size:14px;margin:0 0 10px;color:#c9d1d9}
     .list{display:flex;flex-direction:column;gap:8px}
     .item{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-    .item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
-    .item button{padding:5px 8px;font-size:12px}
+    .item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;max-width:145px}
+    .item-actions{display:flex;gap:5px}
+    .item button{padding:5px 8px;font-size:11px}
     .color-dot{width:16px;height:16px;border-radius:50%;border:1px solid #fff3;flex:0 0 auto}
     .row{display:flex;gap:8px;flex-wrap:wrap}
     .row button{flex:1 1 90px}
     .muted{color:var(--muted);font-size:12px;line-height:1.4}
     .badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#1f6feb22;color:#79c0ff;font-size:11px}
     .status{
-      position:absolute;right:12px;bottom:12px;background:rgba(22,27,34,.92);
-      border:1px solid var(--border);padding:8px 10px;border-radius:10px;color:var(--muted);font-size:12px;z-index:4
+      position:absolute;right:12px;bottom:12px;background:rgba(22,27,34,.95);
+      border:1px solid var(--border);padding:8px 10px;border-radius:10px;color:#c9d1d9;font-size:12px;z-index:4;
+      max-width:min(520px,80%);white-space:pre-wrap
     }
+    .hint{background:#0d419d33;border:1px solid #1f6feb66;padding:9px;border-radius:9px;font-size:12px;line-height:1.4;color:#c9d1d9}
     @media(max-width:800px){
       .layout{grid-template-columns:1fr}
-      aside{position:absolute;z-index:10;left:0;top:60px;bottom:0;width:290px;transform:translateX(-100%);transition:.2s}
+      aside{position:absolute;z-index:10;left:0;top:60px;bottom:0;width:300px;transform:translateX(-100%);transition:.2s}
       aside.open{transform:translateX(0)}
       #menuBtn{display:inline-block}
     }
@@ -61,7 +76,7 @@
   <div class="top-actions">
     <button id="menuBtn">☰ Painel</button>
     <label class="file-label primary" for="fileInput">Abrir STL/3MF</label>
-    <input id="fileInput" type="file" accept=".stl,.3mf" />
+    <input id="fileInput" type="file" accept=".stl,.3mf,model/stl,model/3mf" />
     <button id="resetBtn">Centralizar</button>
   </div>
 </header>
@@ -71,6 +86,12 @@
     <div class="section">
       <h3>Arquivo</h3>
       <div id="fileInfo" class="muted">Nenhum arquivo aberto.</div>
+    </div>
+
+    <div class="section">
+      <div class="hint">
+        <b>Como funciona:</b> depois de abrir o modelo, as peças e cores aparecem abaixo. Você pode isolar, ocultar ou baixar cada parte em STL.
+      </div>
     </div>
 
     <div class="section">
@@ -106,7 +127,6 @@
     <div class="section">
       <h3>Últimos arquivos</h3>
       <div id="historyList" class="list"></div>
-      <div class="muted" style="margin-top:8px">O navegador salva apenas os nomes dos últimos arquivos, não o conteúdo.</div>
     </div>
   </aside>
 
@@ -117,17 +137,19 @@
       <p>Arraste um arquivo <b>.STL</b> ou <b>.3MF</b> aqui</p>
       <p>ou use o botão <b>Abrir STL/3MF</b></p>
     </div>
-    <div id="status" class="status">Pronto</div>
+    <div id="status" class="status">Sistema pronto.</div>
   </main>
 </div>
 
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/controls/OrbitControls.js';
-import { STLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/loaders/STLLoader.js';
-import { ThreeMFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/loaders/3MFLoader.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 
-const viewer = document.getElementById('viewer');
+const $ = id => document.getElementById(id);
+const viewer = $('viewer');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d1117);
 
@@ -135,29 +157,36 @@ const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
 camera.position.set(120, 100, 140);
 
 const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 viewer.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+controls.dampingFactor = 0.08;
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.4));
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.6));
 const d = new THREE.DirectionalLight(0xffffff, 2.2);
-d.position.set(100,180,120); scene.add(d);
+d.position.set(100,180,120);
+scene.add(d);
 
 const grid = new THREE.GridHelper(300, 30, 0x3a4450, 0x232a32);
 scene.add(grid);
 
 let rootModel = null;
 let meshes = [];
+let originalFileName = '';
+
+function setStatus(t){ $('status').textContent=t; }
 
 function resize(){
   const r = viewer.getBoundingClientRect();
-  renderer.setSize(r.width, r.height);
-  camera.aspect = r.width/r.height;
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = Math.max(r.width,1) / Math.max(r.height,1);
   camera.updateProjectionMatrix();
 }
-addEventListener('resize', resize); resize();
+window.addEventListener('resize', resize);
+resize();
 
 function animate(){
   requestAnimationFrame(animate);
@@ -166,30 +195,32 @@ function animate(){
 }
 animate();
 
-function setStatus(t){ document.getElementById('status').textContent=t; }
-
 function clearModel(){
   if(!rootModel) return;
   scene.remove(rootModel);
   rootModel.traverse(o=>{
-    if(o.geometry) o.geometry.dispose?.();
+    o.geometry?.dispose?.();
     if(o.material){
-      const mats = Array.isArray(o.material)?o.material:[o.material];
-      mats.forEach(m=>m.dispose?.());
+      (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m?.dispose?.());
     }
   });
-  rootModel=null; meshes=[];
+  rootModel=null;
+  meshes=[];
 }
 
 function normalizeModel(obj){
+  obj.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  obj.position.sub(center);
-  obj.position.y += size.y/2;
+
+  obj.position.x -= center.x;
+  obj.position.z -= center.z;
+  obj.position.y -= box.min.y;
+
   const maxDim = Math.max(size.x,size.y,size.z) || 1;
   const scale = 120/maxDim;
-  obj.scale.setScalar(scale);
+  obj.scale.multiplyScalar(scale);
   obj.updateMatrixWorld(true);
 }
 
@@ -198,153 +229,255 @@ function fitCamera(){
   const box = new THREE.Box3().setFromObject(rootModel);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x,size.y,size.z);
-  const dist = maxDim / (2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))) * 1.6;
+  const maxDim = Math.max(size.x,size.y,size.z) || 100;
+  const dist = maxDim / (2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))) * 1.55;
   camera.position.set(center.x+dist, center.y+dist*.7, center.z+dist);
+  camera.up.set(0,1,0);
   controls.target.copy(center);
   controls.update();
 }
 
-function getColorKey(material){
-  if(!material) return '#bdbdbd';
-  const m = Array.isArray(material)?material[0]:material;
+function getMaterialColor(material){
+  const mats = Array.isArray(material) ? material : [material];
+  const m = mats.find(x=>x?.color);
   return m?.color ? '#'+m.color.getHexString() : '#bdbdbd';
 }
 
+function safeName(s){
+  return (s || 'peca').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\w\-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'peca';
+}
+
+function cloneMeshesToGroup(selected){
+  const g = new THREE.Group();
+  selected.forEach((m,i)=>{
+    m.updateWorldMatrix(true,false);
+    const geo = m.geometry.clone();
+    geo.applyMatrix4(m.matrixWorld);
+    const mat = Array.isArray(m.material)
+      ? m.material.map(x=>x.clone())
+      : m.material?.clone?.() || new THREE.MeshStandardMaterial();
+    const c = new THREE.Mesh(geo, mat);
+    c.name = m.name || `Peca_${i+1}`;
+    g.add(c);
+  });
+  return g;
+}
+
+function downloadSTL(selected, filename){
+  if(!selected?.length){ setStatus('Nenhuma peça selecionada para exportar.'); return; }
+  const exporter = new STLExporter();
+  const group = cloneMeshesToGroup(selected);
+  const text = exporter.parse(group, {binary:false});
+  const blob = new Blob([text], {type:'model/stl'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1500);
+  group.traverse(o=>{o.geometry?.dispose?.();});
+  setStatus(`Baixado: ${filename}`);
+}
+
+function isolate(selected){
+  const set = new Set(selected);
+  meshes.forEach(m=>m.visible=set.has(m));
+}
+
 function rebuildLists(){
-  meshes = [];
+  meshes=[];
   rootModel?.traverse(o=>{
-    if(o.isMesh){
-      if(!o.name) o.name = 'Peça ' + (meshes.length+1);
+    if(o.isMesh && o.geometry){
+      if(!o.name || /^Mesh$/i.test(o.name)) o.name=`Peça ${meshes.length+1}`;
       meshes.push(o);
     }
   });
 
-  document.getElementById('objCount').textContent = meshes.length;
-  const objList = document.getElementById('objectsList');
+  $('objCount').textContent=meshes.length;
+  const objList=$('objectsList');
   objList.innerHTML='';
+
   meshes.forEach((m,i)=>{
     const row=document.createElement('div'); row.className='item';
-    const name=document.createElement('div'); name.className='name';
+    const name=document.createElement('div'); name.className='name'; name.title=m.name;
     name.textContent=m.name || `Peça ${i+1}`;
-    const btn=document.createElement('button'); btn.textContent='Ocultar';
-    btn.onclick=()=>{ m.visible=!m.visible; btn.textContent=m.visible?'Ocultar':'Mostrar'; };
-    row.append(name,btn); objList.appendChild(row);
+
+    const actions=document.createElement('div'); actions.className='item-actions';
+    const isolateBtn=document.createElement('button'); isolateBtn.textContent='Isolar';
+    isolateBtn.onclick=()=>{ isolate([m]); setStatus(`${name.textContent} isolada.`); };
+
+    const showBtn=document.createElement('button'); showBtn.textContent='Ocultar';
+    showBtn.onclick=()=>{
+      m.visible=!m.visible;
+      showBtn.textContent=m.visible?'Ocultar':'Mostrar';
+    };
+
+    const dlBtn=document.createElement('button'); dlBtn.textContent='STL';
+    dlBtn.onclick=()=>downloadSTL([m], `${safeName(originalFileName.replace(/\.[^.]+$/,''))}_${safeName(name.textContent)}.stl`);
+
+    actions.append(isolateBtn,showBtn,dlBtn);
+    row.append(name,actions);
+    objList.appendChild(row);
   });
 
-  const groups = new Map();
+  const groups=new Map();
   meshes.forEach(m=>{
-    const key=getColorKey(m.material);
+    const key=getMaterialColor(m.material);
     if(!groups.has(key)) groups.set(key,[]);
     groups.get(key).push(m);
   });
 
-  document.getElementById('colorCount').textContent = groups.size;
-  const colorList = document.getElementById('colorsList');
+  $('colorCount').textContent=groups.size;
+  const colorList=$('colorsList');
   colorList.innerHTML='';
-  for(const [color, arr] of groups){
+
+  for(const [color,arr] of groups){
     const row=document.createElement('div'); row.className='item';
-    const left=document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px';
+    const left=document.createElement('div');
+    left.style.display='flex';left.style.alignItems='center';left.style.gap='8px';
+
     const dot=document.createElement('span'); dot.className='color-dot'; dot.style.background=color;
     const name=document.createElement('div'); name.className='name'; name.textContent=`${color} (${arr.length})`;
-    const btn=document.createElement('button'); btn.textContent='Ocultar';
-    btn.onclick=()=>{
-      const anyVisible = arr.some(x=>x.visible);
+
+    const actions=document.createElement('div'); actions.className='item-actions';
+    const isolateBtn=document.createElement('button'); isolateBtn.textContent='Isolar';
+    isolateBtn.onclick=()=>{ isolate(arr); setStatus(`Cor ${color} isolada.`); };
+
+    const showBtn=document.createElement('button'); showBtn.textContent='Ocultar';
+    showBtn.onclick=()=>{
+      const anyVisible=arr.some(x=>x.visible);
       arr.forEach(x=>x.visible=!anyVisible);
-      btn.textContent=anyVisible?'Mostrar':'Ocultar';
+      showBtn.textContent=anyVisible?'Mostrar':'Ocultar';
     };
-    left.append(dot,name); row.append(left,btn); colorList.appendChild(row);
+
+    const dlBtn=document.createElement('button'); dlBtn.textContent='STL';
+    dlBtn.onclick=()=>downloadSTL(arr, `${safeName(originalFileName.replace(/\.[^.]+$/,''))}_cor_${color.replace('#','')}.stl`);
+
+    actions.append(isolateBtn,showBtn,dlBtn);
+    left.append(dot,name); row.append(left,actions);
+    colorList.appendChild(row);
   }
 }
 
 function addHistory(name){
-  let h = JSON.parse(localStorage.getItem('jf3d_history')||'[]');
-  h = [name, ...h.filter(x=>x!==name)].slice(0,8);
-  localStorage.setItem('jf3d_history', JSON.stringify(h));
+  let h=JSON.parse(localStorage.getItem('jf3d_history')||'[]');
+  h=[name,...h.filter(x=>x!==name)].slice(0,8);
+  localStorage.setItem('jf3d_history',JSON.stringify(h));
   renderHistory();
 }
 function renderHistory(){
-  const h = JSON.parse(localStorage.getItem('jf3d_history')||'[]');
-  const el=document.getElementById('historyList'); el.innerHTML='';
+  const h=JSON.parse(localStorage.getItem('jf3d_history')||'[]');
+  const el=$('historyList');el.innerHTML='';
   h.forEach(n=>{
-    const d=document.createElement('div'); d.className='item';
-    d.innerHTML=`<div class="name">${n}</div>`;
-    el.appendChild(d);
+    const d=document.createElement('div');d.className='item';
+    const name=document.createElement('div');name.className='name';name.textContent=n;
+    d.appendChild(name);el.appendChild(d);
   });
 }
 renderHistory();
 
 async function loadFile(file){
-  const ext=file.name.split('.').pop().toLowerCase();
-  if(!['stl','3mf'].includes(ext)){ alert('Use um arquivo STL ou 3MF.'); return; }
-  setStatus('Carregando...');
-  clearModel();
-
-  const buf=await file.arrayBuffer();
-  if(ext==='stl'){
-    const geo=new STLLoader().parse(buf);
-    geo.computeVertexNormals();
-    const mat=new THREE.MeshStandardMaterial({color:0xcfd8dc, metalness:0.05, roughness:0.7});
-    const mesh=new THREE.Mesh(geo,mat);
-    mesh.name=file.name.replace(/\.stl$/i,'');
-    rootModel=new THREE.Group(); rootModel.add(mesh);
-  }else{
-    rootModel=new ThreeMFLoader().parse(buf);
+  if(!file) return;
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(!['stl','3mf'].includes(ext)){
+    alert('Escolha um arquivo .STL ou .3MF.');
+    return;
   }
 
-  normalizeModel(rootModel);
-  scene.add(rootModel);
-  rebuildLists();
-  fitCamera();
+  try{
+    setStatus(`Abrindo ${file.name}...`);
+    clearModel();
+    originalFileName=file.name;
+    const buf=await file.arrayBuffer();
 
-  document.getElementById('drop').classList.add('hidden');
-  document.getElementById('fileInfo').innerHTML=`<b>${file.name}</b><br>${(file.size/1024/1024).toFixed(2)} MB`;
-  addHistory(file.name);
-  setStatus(`${meshes.length} peça(s) carregada(s)`);
+    if(ext==='stl'){
+      const geo=new STLLoader().parse(buf);
+      geo.computeVertexNormals();
+      const mat=new THREE.MeshStandardMaterial({color:0xcfd8dc,metalness:0.04,roughness:0.72,side:THREE.DoubleSide});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.name=file.name.replace(/\.stl$/i,'');
+      rootModel=new THREE.Group();
+      rootModel.add(mesh);
+    }else{
+      rootModel=new ThreeMFLoader().parse(buf);
+    }
+
+    if(!rootModel) throw new Error('O carregador não retornou um modelo.');
+
+    normalizeModel(rootModel);
+    scene.add(rootModel);
+    rebuildLists();
+    fitCamera();
+
+    $('drop').classList.add('hidden');
+    $('fileInfo').innerHTML=`<b>${file.name}</b><br>${(file.size/1024/1024).toFixed(2)} MB`;
+    addHistory(file.name);
+
+    if(meshes.length===0){
+      setStatus('Arquivo aberto, mas nenhuma malha 3D foi encontrada.');
+    }else{
+      setStatus(`${meshes.length} peça(s) encontrada(s). Use "Isolar", "Ocultar" ou "STL".`);
+    }
+  }catch(err){
+    console.error(err);
+    setStatus('ERRO ao abrir o arquivo:\n'+(err?.message || String(err)));
+    alert('Não foi possível abrir esse arquivo. Veja a mensagem no canto inferior direito.');
+  }
 }
 
-document.getElementById('fileInput').addEventListener('change', e=>{
-  if(e.target.files[0]) loadFile(e.target.files[0]);
+$('fileInput').addEventListener('change', e=>{
+  const file=e.target.files?.[0];
+  loadFile(file);
+  e.target.value='';
 });
 
-const drop=document.getElementById('drop');
-['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor='#2f81f7'}));
-['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor='#56606b'}));
-drop.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+const main=$('main');
+['dragenter','dragover'].forEach(ev=>main.addEventListener(ev,e=>{
+  e.preventDefault();e.stopPropagation();
+  $('drop').classList.remove('hidden');
+  $('drop').style.borderColor='#2f81f7';
+}));
+['dragleave'].forEach(ev=>main.addEventListener(ev,e=>{
+  e.preventDefault();e.stopPropagation();
+  $('drop').style.borderColor='#56606b';
+}));
+main.addEventListener('drop',e=>{
+  e.preventDefault();e.stopPropagation();
+  $('drop').style.borderColor='#56606b';
+  const file=e.dataTransfer?.files?.[0];
+  if(file) loadFile(file);
+});
 
-document.getElementById('resetBtn').onclick=fitCamera;
+$('resetBtn').onclick=fitCamera;
 
 function setView(type){
   if(!rootModel) return;
-  const box=new THREE.Box3().setFromObject(rootModel), center=box.getCenter(new THREE.Vector3()), size=box.getSize(new THREE.Vector3());
+  const box=new THREE.Box3().setFromObject(rootModel);
+  const center=box.getCenter(new THREE.Vector3());
+  const size=box.getSize(new THREE.Vector3());
   const dist=Math.max(size.x,size.y,size.z)*1.8;
   const pos={
-    front:[0,0,dist], back:[0,0,-dist], left:[-dist,0,0], right:[dist,0,0],
-    top:[0,dist,0], bottom:[0,-dist,0]
+    front:[0,0,dist],back:[0,0,-dist],left:[-dist,0,0],right:[dist,0,0],
+    top:[0,dist,0],bottom:[0,-dist,0]
   }[type];
+
   camera.position.set(center.x+pos[0],center.y+pos[1],center.z+pos[2]);
   camera.up.set(0,1,0);
-  if(type==='top' || type==='bottom') camera.up.set(0,0,-1);
-  controls.target.copy(center); controls.update();
+  if(type==='top'||type==='bottom') camera.up.set(0,0,-1);
+  controls.target.copy(center);
+  controls.update();
 }
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
 
-document.getElementById('showAllObj').onclick=()=>meshes.forEach(m=>m.visible=true);
-document.getElementById('hideAllObj').onclick=()=>meshes.forEach(m=>m.visible=false);
+$('showAllObj').onclick=()=>{meshes.forEach(m=>m.visible=true);setStatus('Todas as peças visíveis.');};
+$('hideAllObj').onclick=()=>{meshes.forEach(m=>m.visible=false);setStatus('Todas as peças ocultas.');};
+$('showAllColors').onclick=()=>{meshes.forEach(m=>m.visible=true);setStatus('Todas as cores visíveis.');};
+$('hideAllColors').onclick=()=>{meshes.forEach(m=>m.visible=false);setStatus('Todas as cores ocultas.');};
+$('menuBtn').onclick=()=>$('sidebar').classList.toggle('open');
 
-function colorGroups(){
-  const map=new Map();
-  meshes.forEach(m=>{
-    const k=getColorKey(m.material);
-    if(!map.has(k)) map.set(k,[]);
-    map.get(k).push(m);
-  });
-  return map;
-}
-document.getElementById('showAllColors').onclick=()=>[...colorGroups().values()].flat().forEach(m=>m.visible=true);
-document.getElementById('hideAllColors').onclick=()=>[...colorGroups().values()].flat().forEach(m=>m.visible=false);
+window.addEventListener('error',e=>setStatus('ERRO de página:\n'+e.message));
+window.addEventListener('unhandledrejection',e=>setStatus('ERRO:\n'+(e.reason?.message||e.reason||'Falha desconhecida')));
 
-document.getElementById('menuBtn').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
+setStatus('Sistema pronto. Escolha um STL ou 3MF.');
 </script>
 </body>
 </html>
