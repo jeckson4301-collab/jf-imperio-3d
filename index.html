@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JF 3D Tools</title>
+  <style>
+    :root{
+      --bg:#0d1117;--panel:#161b22;--panel2:#21262d;--text:#f0f6fc;
+      --muted:#8b949e;--accent:#2f81f7;--border:#30363d;--ok:#238636;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+    header{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border);background:#0b0f14}
+    .brand{font-weight:800;font-size:20px}.brand span{color:var(--accent)}
+    .top-actions{display:flex;gap:8px;flex-wrap:wrap}
+    button,.file-label{
+      border:1px solid var(--border);background:var(--panel2);color:var(--text);
+      border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600
+    }
+    button:hover,.file-label:hover{border-color:#58a6ff}
+    .primary{background:var(--accent);border-color:var(--accent)}
+    input[type=file]{display:none}
+    .layout{display:grid;grid-template-columns:310px 1fr;height:calc(100vh - 60px)}
+    aside{border-right:1px solid var(--border);background:var(--panel);padding:14px;overflow:auto}
+    main{position:relative;min-width:0}
+    #viewer{position:absolute;inset:0}
+    .drop{
+      position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      width:min(520px,80%);padding:30px;border:2px dashed #56606b;border-radius:18px;
+      text-align:center;background:rgba(13,17,23,.88);z-index:5
+    }
+    .drop.hidden{display:none}
+    .drop h2{margin:0 0 10px}.drop p{margin:6px 0;color:var(--muted)}
+    .section{margin-bottom:18px}.section h3{font-size:14px;margin:0 0 10px;color:#c9d1d9}
+    .list{display:flex;flex-direction:column;gap:8px}
+    .item{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    .item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+    .item button{padding:5px 8px;font-size:12px}
+    .color-dot{width:16px;height:16px;border-radius:50%;border:1px solid #fff3;flex:0 0 auto}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    .row button{flex:1 1 90px}
+    .muted{color:var(--muted);font-size:12px;line-height:1.4}
+    .badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#1f6feb22;color:#79c0ff;font-size:11px}
+    .status{
+      position:absolute;right:12px;bottom:12px;background:rgba(22,27,34,.92);
+      border:1px solid var(--border);padding:8px 10px;border-radius:10px;color:var(--muted);font-size:12px;z-index:4
+    }
+    @media(max-width:800px){
+      .layout{grid-template-columns:1fr}
+      aside{position:absolute;z-index:10;left:0;top:60px;bottom:0;width:290px;transform:translateX(-100%);transition:.2s}
+      aside.open{transform:translateX(0)}
+      #menuBtn{display:inline-block}
+    }
+    @media(min-width:801px){#menuBtn{display:none}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">JF <span>3D Tools</span></div>
+  <div class="top-actions">
+    <button id="menuBtn">☰ Painel</button>
+    <label class="file-label primary" for="fileInput">Abrir STL/3MF</label>
+    <input id="fileInput" type="file" accept=".stl,.3mf" />
+    <button id="resetBtn">Centralizar</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside id="sidebar">
+    <div class="section">
+      <h3>Arquivo</h3>
+      <div id="fileInfo" class="muted">Nenhum arquivo aberto.</div>
+    </div>
+
+    <div class="section">
+      <h3>Vistas</h3>
+      <div class="row">
+        <button data-view="front">Frente</button>
+        <button data-view="back">Trás</button>
+        <button data-view="left">Esquerda</button>
+        <button data-view="right">Direita</button>
+        <button data-view="top">Cima</button>
+        <button data-view="bottom">Baixo</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Separar por peça <span id="objCount" class="badge">0</span></h3>
+      <div class="row" style="margin-bottom:8px">
+        <button id="showAllObj">Mostrar tudo</button>
+        <button id="hideAllObj">Ocultar tudo</button>
+      </div>
+      <div id="objectsList" class="list"></div>
+    </div>
+
+    <div class="section">
+      <h3>Separar por cor <span id="colorCount" class="badge">0</span></h3>
+      <div class="row" style="margin-bottom:8px">
+        <button id="showAllColors">Mostrar tudo</button>
+        <button id="hideAllColors">Ocultar tudo</button>
+      </div>
+      <div id="colorsList" class="list"></div>
+    </div>
+
+    <div class="section">
+      <h3>Últimos arquivos</h3>
+      <div id="historyList" class="list"></div>
+      <div class="muted" style="margin-top:8px">O navegador salva apenas os nomes dos últimos arquivos, não o conteúdo.</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="viewer"></div>
+    <div id="drop" class="drop">
+      <h2>Abra seu modelo 3D</h2>
+      <p>Arraste um arquivo <b>.STL</b> ou <b>.3MF</b> aqui</p>
+      <p>ou use o botão <b>Abrir STL/3MF</b></p>
+    </div>
+    <div id="status" class="status">Pronto</div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/controls/OrbitControls.js';
+import { STLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/loaders/STLLoader.js';
+import { ThreeMFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/loaders/3MFLoader.js';
+
+const viewer = document.getElementById('viewer');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
+camera.position.set(120, 100, 140);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+viewer.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.4));
+const d = new THREE.DirectionalLight(0xffffff, 2.2);
+d.position.set(100,180,120); scene.add(d);
+
+const grid = new THREE.GridHelper(300, 30, 0x3a4450, 0x232a32);
+scene.add(grid);
+
+let rootModel = null;
+let meshes = [];
+
+function resize(){
+  const r = viewer.getBoundingClientRect();
+  renderer.setSize(r.width, r.height);
+  camera.aspect = r.width/r.height;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene,camera);
+}
+animate();
+
+function setStatus(t){ document.getElementById('status').textContent=t; }
+
+function clearModel(){
+  if(!rootModel) return;
+  scene.remove(rootModel);
+  rootModel.traverse(o=>{
+    if(o.geometry) o.geometry.dispose?.();
+    if(o.material){
+      const mats = Array.isArray(o.material)?o.material:[o.material];
+      mats.forEach(m=>m.dispose?.());
+    }
+  });
+  rootModel=null; meshes=[];
+}
+
+function normalizeModel(obj){
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  obj.position.sub(center);
+  obj.position.y += size.y/2;
+  const maxDim = Math.max(size.x,size.y,size.z) || 1;
+  const scale = 120/maxDim;
+  obj.scale.setScalar(scale);
+  obj.updateMatrixWorld(true);
+}
+
+function fitCamera(){
+  if(!rootModel) return;
+  const box = new THREE.Box3().setFromObject(rootModel);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x,size.y,size.z);
+  const dist = maxDim / (2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))) * 1.6;
+  camera.position.set(center.x+dist, center.y+dist*.7, center.z+dist);
+  controls.target.copy(center);
+  controls.update();
+}
+
+function getColorKey(material){
+  if(!material) return '#bdbdbd';
+  const m = Array.isArray(material)?material[0]:material;
+  return m?.color ? '#'+m.color.getHexString() : '#bdbdbd';
+}
+
+function rebuildLists(){
+  meshes = [];
+  rootModel?.traverse(o=>{
+    if(o.isMesh){
+      if(!o.name) o.name = 'Peça ' + (meshes.length+1);
+      meshes.push(o);
+    }
+  });
+
+  document.getElementById('objCount').textContent = meshes.length;
+  const objList = document.getElementById('objectsList');
+  objList.innerHTML='';
+  meshes.forEach((m,i)=>{
+    const row=document.createElement('div'); row.className='item';
+    const name=document.createElement('div'); name.className='name';
+    name.textContent=m.name || `Peça ${i+1}`;
+    const btn=document.createElement('button'); btn.textContent='Ocultar';
+    btn.onclick=()=>{ m.visible=!m.visible; btn.textContent=m.visible?'Ocultar':'Mostrar'; };
+    row.append(name,btn); objList.appendChild(row);
+  });
+
+  const groups = new Map();
+  meshes.forEach(m=>{
+    const key=getColorKey(m.material);
+    if(!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(m);
+  });
+
+  document.getElementById('colorCount').textContent = groups.size;
+  const colorList = document.getElementById('colorsList');
+  colorList.innerHTML='';
+  for(const [color, arr] of groups){
+    const row=document.createElement('div'); row.className='item';
+    const left=document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px';
+    const dot=document.createElement('span'); dot.className='color-dot'; dot.style.background=color;
+    const name=document.createElement('div'); name.className='name'; name.textContent=`${color} (${arr.length})`;
+    const btn=document.createElement('button'); btn.textContent='Ocultar';
+    btn.onclick=()=>{
+      const anyVisible = arr.some(x=>x.visible);
+      arr.forEach(x=>x.visible=!anyVisible);
+      btn.textContent=anyVisible?'Mostrar':'Ocultar';
+    };
+    left.append(dot,name); row.append(left,btn); colorList.appendChild(row);
+  }
+}
+
+function addHistory(name){
+  let h = JSON.parse(localStorage.getItem('jf3d_history')||'[]');
+  h = [name, ...h.filter(x=>x!==name)].slice(0,8);
+  localStorage.setItem('jf3d_history', JSON.stringify(h));
+  renderHistory();
+}
+function renderHistory(){
+  const h = JSON.parse(localStorage.getItem('jf3d_history')||'[]');
+  const el=document.getElementById('historyList'); el.innerHTML='';
+  h.forEach(n=>{
+    const d=document.createElement('div'); d.className='item';
+    d.innerHTML=`<div class="name">${n}</div>`;
+    el.appendChild(d);
+  });
+}
+renderHistory();
+
+async function loadFile(file){
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['stl','3mf'].includes(ext)){ alert('Use um arquivo STL ou 3MF.'); return; }
+  setStatus('Carregando...');
+  clearModel();
+
+  const buf=await file.arrayBuffer();
+  if(ext==='stl'){
+    const geo=new STLLoader().parse(buf);
+    geo.computeVertexNormals();
+    const mat=new THREE.MeshStandardMaterial({color:0xcfd8dc, metalness:0.05, roughness:0.7});
+    const mesh=new THREE.Mesh(geo,mat);
+    mesh.name=file.name.replace(/\.stl$/i,'');
+    rootModel=new THREE.Group(); rootModel.add(mesh);
+  }else{
+    rootModel=new ThreeMFLoader().parse(buf);
+  }
+
+  normalizeModel(rootModel);
+  scene.add(rootModel);
+  rebuildLists();
+  fitCamera();
+
+  document.getElementById('drop').classList.add('hidden');
+  document.getElementById('fileInfo').innerHTML=`<b>${file.name}</b><br>${(file.size/1024/1024).toFixed(2)} MB`;
+  addHistory(file.name);
+  setStatus(`${meshes.length} peça(s) carregada(s)`);
+}
+
+document.getElementById('fileInput').addEventListener('change', e=>{
+  if(e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+const drop=document.getElementById('drop');
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor='#2f81f7'}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor='#56606b'}));
+drop.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+
+document.getElementById('resetBtn').onclick=fitCamera;
+
+function setView(type){
+  if(!rootModel) return;
+  const box=new THREE.Box3().setFromObject(rootModel), center=box.getCenter(new THREE.Vector3()), size=box.getSize(new THREE.Vector3());
+  const dist=Math.max(size.x,size.y,size.z)*1.8;
+  const pos={
+    front:[0,0,dist], back:[0,0,-dist], left:[-dist,0,0], right:[dist,0,0],
+    top:[0,dist,0], bottom:[0,-dist,0]
+  }[type];
+  camera.position.set(center.x+pos[0],center.y+pos[1],center.z+pos[2]);
+  camera.up.set(0,1,0);
+  if(type==='top' || type==='bottom') camera.up.set(0,0,-1);
+  controls.target.copy(center); controls.update();
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
+
+document.getElementById('showAllObj').onclick=()=>meshes.forEach(m=>m.visible=true);
+document.getElementById('hideAllObj').onclick=()=>meshes.forEach(m=>m.visible=false);
+
+function colorGroups(){
+  const map=new Map();
+  meshes.forEach(m=>{
+    const k=getColorKey(m.material);
+    if(!map.has(k)) map.set(k,[]);
+    map.get(k).push(m);
+  });
+  return map;
+}
+document.getElementById('showAllColors').onclick=()=>[...colorGroups().values()].flat().forEach(m=>m.visible=true);
+document.getElementById('hideAllColors').onclick=()=>[...colorGroups().values()].flat().forEach(m=>m.visible=false);
+
+document.getElementById('menuBtn').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
+</script>
+</body>
+</html>
